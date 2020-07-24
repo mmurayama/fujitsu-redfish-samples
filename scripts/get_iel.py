@@ -9,8 +9,12 @@
   - Show all events
   $ python get_iel.py -i 192.168.10.10 -u admin -p admin
 
+  - Show all events (ascending)
+  $ python get_iel.py -i 192.168.10.10 -u admin -p admin -r 
+
   - Show the specified event only
   $ python get_iel.py -i 192.168.10.10 -u admin -p admin -e 118
+
 """
 import sys
 import argparse
@@ -20,38 +24,31 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 __author__ = "Masahiro Murayama"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
-def get_iel(irmc, user, password, event_id):
-    session = requests.Session()
-    session.verify = False
+def get_iel(irmc, user, password, ascend, event_id):
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
 
-    header = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-    payload = {'UserName': user, 'Password': password}
-    sessions_url = "https://{}/redfish/v1/SessionService/Sessions".format(irmc)
-
-    response = session.post(sessions_url,
-                            headers=header,
-                            data=json.dumps(payload))
-
-    if response.status_code != 201:
-        print("ERROR: Failed to create a session.")
-        print("DETAILS: {}".format(response.json()['error']['message']))
-        sys.exit()
-
-    session.headers.update({"X-Auth-Token": response.headers["X-Auth-Token"]})
-    session_info = response.headers["Location"]
-
-    response = session.get("https://{}/redfish/v1/Managers/iRMC/LogServices/InternalEventLog/Entries".format(irmc))
+    response = requests.get(
+        "https://{}/redfish/v1/Managers/iRMC/LogServices/InternalEventLog/Entries".format(irmc),
+        headers=headers,
+        auth=(user, password),
+        verify=False
+    )
 
     if response.status_code != 200:
         print("ERROR: Failed to get the internal event log information from the iRMC at {}".format(irmc))
         print("DETAILS: {}".format(response.json()['error']['message']))
-        session.delete("https://{}{}".format(irmc, session_info))
         sys.exit()
 
     iel_entries_list = response.json()['Members']
+
+    if ascend == True:
+        iel_entries_list.reverse()
 
     if event_id is None:
         print("ID".rjust(3) + " | " + "Data/Time".ljust(25) +
@@ -66,7 +63,8 @@ def get_iel(irmc, user, password, event_id):
             if int(entry['Id']) == event_id:
                 print("ID".rjust(3) + " | " + "Data/Time".ljust(25) +
                       " | " + "Severity".ljust(8) + " | Event")
-                print("------------------------------------------------------------------")
+                print(
+                    "------------------------------------------------------------------")
                 print(entry["Id"].rjust(3) + " | " + entry["Created"].rjust(25) +
                       " | " + entry['Severity'].ljust(8) + " | " + entry["Message"])
                 found = True
@@ -74,8 +72,6 @@ def get_iel(irmc, user, password, event_id):
 
         if found == False:
             print("ERROR: Could not find the specified event (ID: {})".format(event_id))
-
-    session.delete("https://{}{}".format(irmc, session_info))
 
 
 def main():
@@ -92,15 +88,17 @@ def main():
     parser.add_argument('-e', '--event',
                         type=int,
                         help="Show the event specified by the ID")
+    parser.add_argument('-r',
+                        action='store_true',
+                        help="Ascending the events")
     args = parser.parse_args()
     irmc = args.irmc
     user = args.user
     password = args.password
     event_id = args.event
+    ascend = args.r
 
-    get_iel(irmc, user, password, event_id)
-
-    return 0
+    get_iel(irmc, user, password, ascend, event_id)
 
 
 if __name__ == '__main__':
