@@ -13,17 +13,16 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 __author__ = "Masahiro Murayama"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
-def change_boot_device(irmc, user, password, bootdevice, nextbootonly):
-    url = "https://{}/redfish/v1/Systems/0/Oem/ts_fujitsu/BootConfig".format(
-        irmc)
-    bootdevice_list = ['Pxe', 'Floppy', 'Cd', 'Hdd', 'BiosSetup']
+def change_boot_device(irmc, user, password, bootdevice, bootmode, permanent):
+    url = "https://{}/redfish/v1/Systems/0/Oem/ts_fujitsu/BootConfig".format(irmc)
 
     response = requests.get(url, auth=(user, password), verify=False)
     status_code = response.status_code
-    if status_code != 200 and status_code != 202 and status_code != 204:
+
+    if status_code != 200:
         print("The request failed (url: {0}, error: {1})".format(
             url, response.json()['error']['message']))
         sys.exit()
@@ -36,10 +35,6 @@ def change_boot_device(irmc, user, password, bootdevice, nextbootonly):
             current_bootdevice))
         sys.exit()
 
-    if bootdevice not in bootdevice_list:
-        print("The boot device must be either Pxe, Floppy, Cd, Hdd, or BiosSetup.")
-        sys.exit()
-
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -47,12 +42,14 @@ def change_boot_device(irmc, user, password, bootdevice, nextbootonly):
     }
     payload = {
         'BootDevice': bootdevice,
-        'NextBootOnlyEnabled': nextbootonly.lower()
+        'BootType': bootmode,
+        'NextBootOnlyEnabled': 'false' if permanent == True else 'true'
     }
     response = requests.patch(url, headers=headers, auth=(
         user, password), data=json.dumps(payload), verify=False)
     status_code = response.status_code
-    if status_code != 200 and status_code != 202 and status_code != 204:
+
+    if status_code != 200:
         print("The request failed (url: {0}, error: {1})".format(
             url, response.json()['error']['message']))
         sys.exit()
@@ -77,20 +74,27 @@ def main():
     parser.add_argument(
         '-b', '--bootdevice',
         required=True,
-        help="Boot Device: Pxe, Floppy, Cd, Hdd, or BiosSetup")
+        choices=['None', 'Pxe', 'Floppy', 'Cd', 'Hdd', 'BiosSetup'],
+        help="Boot device")
     parser.add_argument(
-        '-n', '--nextbootonly',
-        default=True,
-        help="Change effects next boot only or permanent: True or False")
+        '-m', '--mode',
+        choices=['Legacy', 'UEFI'],
+        default='UEFI',
+        help="Boot mode")
+    parser.add_argument(
+        '--permanent',
+        action='store_true',
+        help="Change effects permanent")
 
     args = parser.parse_args()
     irmc = args.irmc
     user = args.user
     password = args.password
     bootdevice = args.bootdevice
-    nextbootonly = args.nextbootonly
+    bootmode = args.mode
+    permanent = args.permanent
 
-    change_boot_device(irmc, user, password, bootdevice, nextbootonly)
+    change_boot_device(irmc, user, password, bootdevice, bootmode, permanent)
 
 
 if __name__ == '__main__':
