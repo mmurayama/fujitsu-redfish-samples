@@ -19,7 +19,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 __author__ = "Masahiro Murayama"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
 def download_log_archive(irmc, user, password, archive_name):
@@ -40,6 +40,14 @@ def download_log_archive(irmc, user, password, archive_name):
         sys.exit()
     session.headers.update({"X-Auth-Token": response.headers["X-Auth-Token"]})
     session_info = response.headers['Location']
+
+    response = session.get('https://{}/redfish/v1/Managers/iRMC'.format(irmc))
+    irmc_fw = response.json()['FirmwareVersion']
+    irmc_model = response.json()['Model']
+
+    if irmc_model == 'iRMC S4' and int(irmc_fw[0:-1].replace('.','')) < 960:
+        print("ERROR: The Log Archive endpoint is not supported in {} firmware {}.".format(irmc_model, irmc_fw))
+        sys.exit()
 
     # Generate a log file archive
     url = "https://{}/redfish/v1/Oem/ts_fujitsu/FileDownload/Actions/FTSFileDownload.GenerateLogFileArchive".format(irmc)
