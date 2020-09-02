@@ -1,2 +1,8 @@
 venv
 .vscode
+*.pre
+*.xml
+*.zip
+*.tgz
+diag
+TODO
